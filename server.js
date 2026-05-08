@@ -133,7 +133,7 @@ io.on("connection", (socket) => {
 app.use("/device", deviceRouter);
 
 app.get("/", (req, res) => {
-    res.send("Hello FaRaZ to IOTFIY-LuckyOne");
+    res.send("Hello FaRaZ to test-MQTT");
 });
 
 // Start Server
