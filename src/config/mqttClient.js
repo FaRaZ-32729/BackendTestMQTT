@@ -5,7 +5,7 @@ const mqtt = require("mqtt");
 const client = mqtt.connect("mqtt://testmqtt.iotfiysolutions.com", {
     port: 1883,
     username: "mqttuser",
-    password: "YOUR_PASSWORD"
+    password: "Growmore12345@"
 });
 
 module.exports = client;
