@@ -103,11 +103,19 @@
 //     }, 10000);
 // };
 
-
 const client = require("../config/mqttClient");
 const deviceModel = require("../model/deviceModel");
 
+// ================= DEVICE TRACKING =================
 const connectedDevices = new Map();
+
+/*
+Structure:
+deviceId => {
+  lastSeen: timestamp,
+  missedHeartbeats: number
+}
+*/
 
 module.exports = (io) => {
 
@@ -124,13 +132,12 @@ module.exports = (io) => {
         console.log("📡 Subscribed to all topics\n");
     });
 
-    // ================= MQTT MESSAGE HANDLER =================
+    // ================= MQTT MESSAGE =================
     client.on("message", async (topic, message) => {
         try {
             const rawMessage = message.toString();
-            console.log(`\n📩 TOPIC: ${topic}`);
-
             let data;
+
             try {
                 data = JSON.parse(rawMessage);
             } catch (err) {
@@ -142,13 +149,29 @@ module.exports = (io) => {
             if (!deviceId) return;
 
             const deviceExists = await deviceModel.findOne({ deviceId });
-            if (!deviceExists) {
-                console.log(`❌ Device not found: ${deviceId}`);
+            if (!deviceExists) return;
+
+            // ================= INIT DEVICE TRACKING =================
+            if (!connectedDevices.has(deviceId)) {
+                connectedDevices.set(deviceId, {
+                    lastSeen: Date.now(),
+                    missedHeartbeats: 0
+                });
+            }
+
+            const deviceState = connectedDevices.get(deviceId);
+
+            // ================= HEARTBEAT =================
+            if (topic.includes("/heartbeat")) {
+                deviceState.lastSeen = Date.now();
+                deviceState.missedHeartbeats = 0;
+
+                console.log(`💓 HEARTBEAT → ${deviceId}`);
                 return;
             }
 
-            // ================= UPDATE LAST SEEN =================
-            connectedDevices.set(deviceId, { lastSeen: Date.now() });
+            // update lastSeen for all messages
+            deviceState.lastSeen = Date.now();
 
             let updatedDevice = null;
 
@@ -209,16 +232,23 @@ module.exports = (io) => {
         }
     });
 
-    // ================= AUTO OFFLINE (OPTIMIZED) =================
+    // ================= HEARTBEAT MONITOR =================
     setInterval(async () => {
+
         const now = Date.now();
 
-        for (const [deviceId, data] of connectedDevices) {
+        for (const [deviceId, state] of connectedDevices) {
 
-            const lastSeen = data.lastSeen;
+            const timeDiff = now - state.lastSeen;
 
-            // ⚡ Faster timeout (12 seconds instead of 35s)
-            if (now - lastSeen > 12000) {
+            // if no heartbeat in last 6 seconds → increase miss
+            if (timeDiff > 6000) {
+                state.missedHeartbeats += 1;
+                state.lastSeen = now; // prevent repeated spam logs
+            }
+
+            // ================= OFFLINE AFTER 2 MISSES =================
+            if (state.missedHeartbeats >= 2) {
 
                 const updatedDevice = await deviceModel.findOneAndUpdate(
                     { deviceId },
@@ -231,11 +261,12 @@ module.exports = (io) => {
 
                 if (updatedDevice && io) {
                     io.emit("deviceUpdate", updatedDevice);
-                    console.log(`📴 DEVICE OFFLINE → ${deviceId}`);
+                    console.log(`📴 DEVICE OFFLINE (HEARTBEAT LOST) → ${deviceId}`);
                 }
 
                 connectedDevices.delete(deviceId);
             }
         }
-    }, 3000); // ⚡ Faster check interval (was 10000ms)
+
+    }, 3000); // fast check every 3 sec
 };
