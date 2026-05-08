@@ -109,7 +109,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: ["http://localhost:5173", "https://luckyone-iotfiysolutions.vercel.app"],
+        origin: ["http://localhost:5173", "https://frontend-test-socket-io.vercel.app"],
         credentials: true
     },
     pingTimeout: 90000,
