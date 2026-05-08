@@ -11,6 +11,9 @@ const {
 // ================= ROUTES =================
 router.post("/create-device", createDevice);
 
-router.post("/control-power", controlPower);
+router.get("/all-devices", getAllDevices);
+
+
+router.post("/control-power", controlPower)
 
 module.exports = router;
